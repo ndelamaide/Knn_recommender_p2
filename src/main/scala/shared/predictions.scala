@@ -6,7 +6,7 @@ import scala.io.Source
 import scala.collection.mutable.ArrayBuffer
 import org.apache.spark.SparkContext
 
-import org.apache.spark.rdd.RDD
+import org.apache.spark.rdd.RDD // TO REMOVE NOT IN MILESTONE 2
 
 package object predictions
 {
@@ -154,9 +154,9 @@ package object predictions
     * @param users_avg dictionary of user avegage ratings (user, avg-rating)
     * @return Dataframe with standardized ratings
     */
-  def standardizeRatings(ratings: Array[Rating], users_avg: Map[Int, Double]): Array[Rating] = {
-     ratings.map(x => Rating(x.user, x.item, standardize(x.rating, users_avg(x.user))))
-   }
+  // def standardizeRatings(ratings: Array[Rating], users_avg: Map[Int, Double]): Array[Rating] = {
+  //    ratings.map(x => Rating(x.user, x.item, standardize(x.rating, users_avg(x.user))))
+  //  }
   
   /** 
     * Computes the MAE of a given predictor
@@ -389,13 +389,13 @@ package object predictions
     * @param standardized_ratings
     * @return a dataframe with the ratings pre-processed
     */
-  def preprocessRatings(standardized_ratings: Array[Rating]): Array[Rating] = {
+  // def preprocessRatings(standardized_ratings: Array[Rating]): Array[Rating] = {
 
-    // Compute sum of square of devs for each user
-    val squared_sum_users = standardized_ratings.groupBy(_.user).mapValues(x => x.foldLeft(0.0)((sum, rating) => sum + scala.math.pow(rating.rating, 2)))
+  //   // Compute sum of square of devs for each user
+  //   val squared_sum_users = standardized_ratings.groupBy(_.user).mapValues(x => x.foldLeft(0.0)((sum, rating) => sum + scala.math.pow(rating.rating, 2)))
 
-    standardized_ratings.map(x => Rating(x.user, x.item, x.rating / scala.math.sqrt(squared_sum_users(x.user))))
-  }
+  //   standardized_ratings.map(x => Rating(x.user, x.item, x.rating / scala.math.sqrt(squared_sum_users(x.user))))
+  // }
   
   /**
     * Computes the similarity between each user using a value of 1 (uniform)
@@ -584,7 +584,7 @@ package object predictions
 
 
 
-  //------------------------------------------------Milestone2-----------------------------------------
+  //------------------------------------------------Milestone2----------------------------------------- 
   /** 
 //     * Computes global average
 //     * 
@@ -600,6 +600,112 @@ package object predictions
 // }
 //     mean(ratings.map(x => x.rating))
 //   }
+
+      // Rows are users, Columns are movies
+
+      def computeGlobalAvg(ratings: CSCMatrix[Double]): Double =  {
+        sum(ratings) / ratings.activeSize
+      }
+
+      def computeUsersAvg(ratings: CSCMatrix[Double]): DenseVector[Double] = {
+
+        val ones_cols = DenseVector.ones[Double](ratings.cols)
+
+        val user_sum = ratings * ones_cols
+        val counts = ratings.mapActiveValues(x => 1.0) * ones_cols
+
+        return user_sum /:/ counts // element-wise division
+      }
+
+      def standardizeRatings(ratings: CSCMatrix[Double], users_avg: DenseVector[Double]): CSCMatrix[Double] = {
+        
+        val builder = new CSCMatrix.Builder[Double](rows=ratings.rows, cols=ratings.cols)
+
+        for ((k, v) <- ratings.activeIterator) {
+            builder.add(k._1, k._2, standardize(v, users_avg(k._1)))
+        }
+
+        return builder.result
+      }
+
+      def preprocessRatings(standardized_ratings: CSCMatrix[Double]): CSCMatrix[Double] = {
+
+        val ones_rows = DenseVector.ones[Double](standardized_ratings.rows)
+
+        val ru_squared = standardized_ratings *:* standardized_ratings
+        val sum_ru_squared = (ru_squared.t * ones_rows).mapValues(x => scala.math.sqrt(x))
+
+        val builder = new CSCMatrix.Builder[Double](rows=standardized_ratings.rows, cols=standardized_ratings.cols)
+
+        for ((k, v) <- standardized_ratings.activeIterator) {
+            builder.add(k._1, k._2, v / sum_ru_squared(k._1))
+        }
+
+        return builder.result
+      }
+
+      // Probably wrong as its not fast
+      def computeUserSimilarities(preprocessed_ratings: CSCMatrix[Double]): CSCMatrix[Double] = {
+
+        val builder = new CSCMatrix.Builder[Double](rows=preprocessed_ratings.rows, cols=preprocessed_ratings.rows)
+
+        for (u1 <- 0 to (preprocessed_ratings.rows - 1); u2 <- 0 to (preprocessed_ratings.rows - 1)) {
+          if (u1 < u2) {
+            builder.add(u1, u2, 
+            sum(preprocessed_ratings(u1, 0 to (preprocessed_ratings.cols - 1)) *:* preprocessed_ratings(u2, 0 to (preprocessed_ratings.cols - 1))))
+          } else if (u1 == u2) {
+            builder.add(u1, u2, 1.0)
+          }
+        }
+
+        return builder.result
+      }
+
+      def computeRi(standardized_ratings: CSCMatrix[Double], user_similarities: CSCMatrix[Double], user: Int, item: Int): Double = {
+        
+        val r_v = standardized_ratings(0 to standardized_ratings.rows, item)
+
+        var numerator = 0.0
+        var denominator = 0.0
+
+        for ((k, v) <- r_v.activeIterator) {
+           val s_uv = if (user < k) user_similarities(user, k) else user_similarities(k, user)
+
+           numerator += s_uv * v
+           denominator += scala.math.abs(s_uv)
+        } 
+
+        if (denominator == 0.0) 0.0 else numerator / denominator
+      }
+
+
+
+  /* ----------------------------------- Parallel k-NN ----------------------------------------- */
+  
+
+
+  // def parallelKNN(ratings: Array[Rating], sc: org.apache.spark.SparkContext, k: Int): CSCMatrix[Double] = {
+
+  //     val users_avg = computeUsersAvg(ratings)
+  //     val standardized_ratings = standardizeRatings(ratings, users_avg)
+  //     val preprocessed_ratings = preprocessRatings(standardized_ratings)
+
+  //     val br = sc.broadcast(preprocessed_ratings)
+
+  //     def topk(u: Int): (Int, (Int, Double)) = {
+
+  //       val r_curve = br.value
+  //       val su = 
+  //     }
+
+
+
+
+  //     val builder = new CSCMatrix.Builder[Double](rows=2, cols=2) // ex
+
+  //     return builder.result
+
+  // }
 
 
 }
