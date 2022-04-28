@@ -1,0 +1,61 @@
+\ProvidesPackage{m2questions}[2022/03/11 v1.0]
+
+% Breeze
+
+\newcommand{\BROne}{
+Reimplement the kNN predictor of Milestone 1 using the Breeze library and without using Spark. Using $k=10$ and  \texttt{data/ml-100k/u2.base} for training, output the similarities between: (1) user $1$ and itself; (2) user $1$ and user $864$; (3) user $1$ and user $886$. Still using $k=10$, output the prediction for user 1 and item 1 ($p_{1,1}$), the prediction for user 327 and item 2 ($p_{327,2}$),  and make sure that you obtain an MAE of $0.8287 \pm 0.0001$ on \texttt{data/ml-100k/u2.test}.
+}
+
+\newcommand{\BRTwoOne}{
+Try making your implementation as fast as possible, both for computing all k-nearest neighbours and for computing the predictions and MAE on a test set. Your implementation should be based around \texttt{CSCMatrix}, but may involve conversions for individual operations.  We will test your implementation on a secret test set. The teams with both a correct answer and the shortest time will receive more points.
+}
+
+\newcommand{\BRTwoTwo}{
+  Using $k=300$, compare the time for predicting all values and computing the MAE of \texttt{ml-100k/u2.test} to the one you obtained in Milestone 1. What is the speedup of your new implementation (as a ratio of $\frac{\textit{average time}_{old}}{\textit{average time}_{new}}$)? Use the same machine to measure the time for both versions and provide the answer in your report.
+}
+
+\newcommand{\BRTwoThree}{
+  Also ensure your implementation works with \texttt{data/ml-1m/rb.train} and \texttt{data/ml-1m/rb.test} since you will reuse it in the next questions.
+}
+
+% Parallel Exact Knn
+
+\newcommand{\EKOne}{
+Test your parallel implementation of k-NN for correctness with two workers. Using $k=10$ and  \texttt{data/ml-100k/u2.base} for training, output the similarities between: (1) user $1$ and itself; (2) user $1$ and user $864$; (3) user $1$ and user $886$. Still using $k=10$, output the prediction for user 1 and item 1 ($p_{1,1}$), the prediction for user 327 and item 2 ($p_{327,2}$),  and make sure that you obtain an MAE of $0.8287 \pm 0.0001$ on \texttt{data/ml-100k/u2.test}
+}
+
+\newcommand{\EKTwo}{
+Measure and report the combined \textit{k-NN} and \textit{prediction} time when using 1, 2, 4 workers, $k=300$, and \texttt{ml-1m/rb.train} for training and \texttt{ml-1m/rb.test} for test, on the cluster (or a machine with at least 4 physical cores). Perform 3 measurements for each experiment and report the average and standard-deviation total time, including training, making predictions, and computing the MAE. Do you observe a speedup? Does this speedup grow linearly with the number of executors, i.e. is the running time $X$ times faster when using $X$ executors compared to using a single executor? Answer both questions in your report.
+}
+
+% Approximate Knn
+
+\newcommand{\AKOne}{
+Implement the approximate k-NN using your previous breeze implementation and Spark's RDDs. Using the partitioner of the template with 10 partitions and 2 replications, $k=10$, and \texttt{data/ml-100k/u2.base} for training, output the similarities of the approximate k-NN between user $1$ and the following users: $1,864,344,16,334,2$.
+}
+
+\newcommand{\AKTwo}{
+Vary the number of partitions in which a given user appears. For the \texttt{data/ml-100k/u2.base} training set, partitioned equally between 10 workers, report the relationship between the level of replication (1,2,3,4,6,8) and the MAE you obtain on the \texttt{data/ml-100k/u2.test} test set. What is the minimum level of replication such that the MAE is still lower than the baseline predictor of Milestone 1 (MAE of 0.7604), when using $k=300$? Does this reduce the number of similarity computations compared to an exact k-NN? What is the ratio? Answer both questions in your report.
+}
+
+\newcommand{\AKThree}{
+Measure and report the time required by your approximate \textit{k-NN} implementation, including both training on \texttt{data/ml-1m/rb.train} and computing the MAE on the test set \texttt{data/ml-1m/rb.test}, using $k=300$ on 8 partitions with a replication factor of 1 when using 1, 2, 4 workers. Perform each experiment 3 times and report the average and standard-deviation. Do you observe a speedup compared to the parallel (exact) k-NN with replicated ratings for the same number of workers?
+}
+
+% Economics
+
+\newcommand{\EOne}{
+What is the minimum number of days of renting to make buying the ICC.M7 less expensive, excluding any operating costs such as electricity and maintenance? Round up to the nearest integer.
+}
+
+\newcommand{\ETwoOne}{
+After how many days of renting a container, is the cost higher than buying and running 4 Raspberry Pis? (1) Assuming optimistically no maintenance at minimum power usage for RPis, and (2) no maintenance at maximum power usage for RPis, to obtain a likely range. (Round up to the nearest integer in each case).
+}
+
+\newcommand{\ETwoTwo}{
+Assume a single processor for the container and an equivalent amount of total RAM as the 4 Raspberry Pis. Also provide unrounded intermediary results for (1) Container Daily Cost, (2) 4 RPis (Idle) Daily Electricity Cost, (3) 4 RPis (Computing) Daily Electricity Cost.
+}
+
+\newcommand{\EThree}{
+For the same buying price as an ICC.M7, how many Raspberry Pis can you get (floor the result to remove the decimal)? Assuming perfect scaling, would you obtain a larger overall throughput and RAM from these? If so, by how much?  Compute the ratios using the previous floored number of RPis, but do not round the final results.
+}
