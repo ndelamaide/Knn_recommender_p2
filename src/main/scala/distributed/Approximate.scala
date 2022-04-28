@@ -32,7 +32,7 @@ class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
 }
 
 object Approximate {
-  def main(args: Array[String]) {
+  def main(args: Array[String]): Unit = {
     var conf = new Conf(args)
 
     // Remove these lines if encountering/debugging Spark
@@ -71,6 +71,26 @@ object Approximate {
     }))
     val mae = measurements(0)._1
     val timings = measurements.map(_._2)
+
+    // global_avg = computeGlobalAvg(train)
+    // users_avg = computeUsersAvg(train)
+    // standardized_ratings = standardizeRatings(train, users_avg)
+    // preprocessed_ratings = preprocessRatings(standardized_ratings)
+    // preprocessed_groupby_user = preprocessed_ratings.groupBy(_.user)
+    // standardized_groupby_item = standardized_ratings.groupBy(_.item)
+    // similarities_cosine = computeCosine(preprocessed_ratings)
+    // user_similarities = computeUserSimilarities(train)
+
+    // val predictor_allNN = predictorAllNN(train)
+    // val predictor_10NN = predictor_allNN(10)
+
+    // val N11 = adjustedCosine(preprocessed_groupby_user, 1, 1)
+    // val N12 = adjustedCosine(preprocessed_groupby_user, 1, 864)
+    // val N13 = adjustedCosine(preprocessed_groupby_user, 1, 886)
+    // val N14 = predictor_10NN(1, 1)
+
+
+
 
     // Save answers as JSON
     def printToFile(content: String,
