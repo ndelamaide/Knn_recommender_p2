@@ -46,23 +46,34 @@ object Optimizing extends App {
     val test = loadSpark(sc, conf.test(), conf.separator(), conf.users(), conf.movies())
 
     val measurements = (1 to conf.num_measurements()).map(x => timingInMs(() => {
+      val k  = 10
+      // val predictor_allnn = predictorAllNN(train)
+      // val predictor10NN = predictor_allnn(k)
+      // MAE(test, predictor10NN)
+
       0.0
     }))
+
     val timings = measurements.map(t => t._2)
     val mae = measurements(0)._1
 
+    val users_avg = computeUsersAvg(train)
 
-    val glob = computeGlobalAvg(train)
-    println(glob)
-    val user_avg = computeUsersAvg(train)
-    println(user_avg(0))
+    val k = 10
 
-    val stand = standardizeRatings(train, user_avg)
-    val pre = preprocessRatings(stand)
-    println("preprocessed")
-    //val sims = computeUserSimilarities(pre)
+    val standardized_ratings = standardizeRatings(train, users_avg)
+    val preprocessed_ratings = preprocessRatings(standardized_ratings)
+    val similarities = computeUserSimilarities(preprocessed_ratings, k)
 
-   // println(sims(0,0), sims(0, 863), sims(0, 885))
+    val predictor_allnn = predictorAllNN(train)
+    val predictor10NN = predictor_allnn(k)
+
+    val BR11 = similarities(0,0)
+    val BR12 = similarities(0, 863)
+    val BR13 = similarities(0, 885)
+    val BR14 = predictor10NN(0, 0)
+    val BR15 = predictor10NN(326, 1)
+    val BR16 = 0.0//MAE(test, predictor10NN)
 
 
     // Save answers as JSON
@@ -86,12 +97,12 @@ object Optimizing extends App {
             "num_measurements" -> ujson.Num(conf.num_measurements())
           ),
           "BR.1" -> ujson.Obj(
-            "1.k10u1v1" -> ujson.Num(0.0),
-            "2.k10u1v864" -> ujson.Num(0.0),
-            "3.k10u1v886" -> ujson.Num(0.0),
-            "4.PredUser1Item1" -> ujson.Num(0.0),
-            "5.PredUser327Item2" -> ujson.Num(0.0),
-            "6.Mae" -> ujson.Num(0.0)
+            "1.k10u1v1" -> ujson.Num(BR11),
+            "2.k10u1v864" -> ujson.Num(BR12),
+            "3.k10u1v886" -> ujson.Num(BR13),
+            "4.PredUser1Item1" -> ujson.Num(BR14),
+            "5.PredUser327Item2" -> ujson.Num(BR15),
+            "6.Mae" -> ujson.Num(BR16)
           ),
           "BR.2" ->  ujson.Obj(
             "average (ms)" -> ujson.Num(mean(timings)), // Datatype of answer: Double
