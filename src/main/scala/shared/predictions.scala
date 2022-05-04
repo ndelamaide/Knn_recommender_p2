@@ -144,7 +144,7 @@ package object predictions
     val ones_cols = DenseVector.ones[Double](standardized_ratings.cols)
 
     val ru_squared = standardized_ratings *:* standardized_ratings
-    val sum_ru_squared = (ru_squared * ones_cols).mapValues(x => scala.math.sqrt(x))
+    val sum_ru_squared = (ru_squared * ones_cols).mapActiveValues(scala.math.sqrt(_))
 
     val builder = new CSCMatrix.Builder[Double](rows=standardized_ratings.rows, cols=standardized_ratings.cols)
 
@@ -168,8 +168,10 @@ package object predictions
       val similar_u = similarities(0 to similarities.rows-1, u)
 
       for (i <- argtopk(similar_u, k)) {
-        builder.add(u, i, similar_u(i))
+
+        // Need both ?
         builder.add(i, u, similar_u(i))
+        builder.add(u, i, similar_u(i)) 
       }
     }
 
@@ -181,7 +183,7 @@ package object predictions
     val r_vi = standardized_ratings(0 to standardized_ratings.rows-1, item) // ratings on item i
     val similar_u = user_similarities(0 to user_similarities.rows-1, user) // Similarity of u with other users
 
-    var numerator = sum(similar_u *:* r_vi )
+    var numerator = similar_u.t * r_vi 
     var denominator = sum((similar_u *:* r_vi.mapActiveValues(x => 1.0)).mapActiveValues(scala.math.abs(_)))
 
     //println(numerator, denominator)
