@@ -61,16 +61,12 @@ object Exact {
     val timings = measurements.map(_._2)
 
     val users_avg = computeUsersAvg(train)
-    val global_avg = computeGlobalAvg(train)
-
-    val k = 10
-
     val standardized_ratings = standardizeRatings(train, users_avg)
     val preprocessed_ratings = preprocessRatings(standardized_ratings)
-    val similarities = parallelKNN(preprocessed_ratings, sc, k)
+    val similarities = parallelKNN(preprocessed_ratings, sc, conf_k)
 
-    val predictor_allnn = predictorAllNN(train)
-    val predictor10NN = predictor_allnn(k)
+    val predictor_allnn = predictorAllNN(train, sc)
+    val predictor10NN = predictor_allnn(conf_k)
 
     val EK11 = similarities(0,0)
     val EK12 = similarities(0, 863)

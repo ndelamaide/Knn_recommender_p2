@@ -282,13 +282,12 @@ package object predictions
 
       val ratings_ = br.value
       val su = computeUserSimilaritiesParallel(ratings_, u)
-
       return (u, argtopk(su, k).map(v => (v, su(v))))
     }
 
     val topks = sc.parallelize(0 to preprocessed_ratings.rows-1).map(topk(_)).collect()
 
-    val builder = new CSCMatrix.Builder[Double](rows=preprocessed_ratings.rows, cols=preprocessed_ratings.cols)
+    val builder = new CSCMatrix.Builder[Double](rows=preprocessed_ratings.rows, cols=preprocessed_ratings.rows)
 
     for ((user, topk) <- topks) {
       for ((other_user, similarity) <- topk) {
@@ -315,6 +314,8 @@ package object predictions
     (k: Int) => {
 
       val similarities = parallelKNN(preprocessed_ratings, sc, k)
+
+      print(similarities.rows, similarities.cols)
 
       val Ris = computeRi_(ratings, standardized_ratings, similarities)
       
