@@ -155,9 +155,11 @@ package object predictions
     return builder.result
   } 
 
+
   def computeUserSimilarities(preprocessed_ratings: CSCMatrix[Double], k: Int): CSCMatrix[Double] = {
 
-    val similarities = preprocessed_ratings * preprocessed_ratings.t
+    var similarities = preprocessed_ratings * preprocessed_ratings.t
+
 
     val builder = new CSCMatrix.Builder[Double](rows=similarities.rows, cols=similarities.cols)
 
@@ -166,11 +168,10 @@ package object predictions
       similarities(u, u) = 0.0
 
       val similar_u = similarities(0 to similarities.rows-1, u)
-
       for (i <- argtopk(similar_u, k)) {
 
         // Need both ?
-        builder.add(i, u, similar_u(i))
+        //builder.add(i, u, similar_u(i))
         builder.add(u, i, similar_u(i)) 
       }
     }
@@ -178,17 +179,32 @@ package object predictions
     return builder.result
   }
 
-  def computeRi(standardized_ratings: CSCMatrix[Double], user_similarities: CSCMatrix[Double], user: Int, item: Int): Double = {
+  def computeRi(ratings: CSCMatrix[Double] , standardized_ratings: CSCMatrix[Double], user_similarities: CSCMatrix[Double], user: Int, item: Int): Double = {
     
     val r_vi = standardized_ratings(0 to standardized_ratings.rows-1, item) // ratings on item i
     val similar_u = user_similarities(0 to user_similarities.rows-1, user) // Similarity of u with other users
-
+    val users_who_graged_i = ratings(0 to standardized_ratings.rows-1, item)
     var numerator = similar_u.t * r_vi 
-    var denominator = sum((similar_u *:* r_vi.mapActiveValues(x => 1.0)).mapActiveValues(scala.math.abs(_)))
+    var denominator = sum((similar_u *:* users_who_graged_i.mapActiveValues(x => 1.0)).mapActiveValues(scala.math.abs(_))) 
+    // *:* r_vi.mapActiveValues(x => 1.0)
 
     //println(numerator, denominator)
 
     if (denominator == 0.0) 0.0 else numerator / denominator
+  
+  }
+
+  def computeRi_(ratings: CSCMatrix[Double] , standardized_ratings: CSCMatrix[Double], user_similarities: CSCMatrix[Double]): CSCMatrix[Double] = {
+    
+    val numerator = user_similarities * standardized_ratings
+    val denominator = user_similarities.mapActiveValues(scala.math.abs(_)) * ratings.mapActiveValues(x => 1.0) 
+    var result = new CSCMatrix.Builder[Double](rows=ratings.rows, cols=ratings.cols)
+
+    for ((k,v) <- numerator.activeIterator) {
+      result.add(k._1, k._2, v/(denominator(k)))
+    }   
+
+    return result.result
   }
 
     /**
@@ -207,18 +223,19 @@ package object predictions
     (k: Int) => {
 
       val similarities = computeUserSimilarities(preprocessed_ratings, k)
+
+      val Ris = computeRi_(ratings, standardized_ratings, similarities)
+
+
       
         (u: Int, i: Int) =>  {
 
           val ru = users_avg(u)
 
-          //println(ru)
 
           if (ru != 0.0) {
 
-            val ri = computeRi(standardized_ratings, similarities, u, i)
-
-            //println("ri", ri)
+            val ri = Ris(u, i)
 
             ru + ri * scale(ru + ri, ru)
 

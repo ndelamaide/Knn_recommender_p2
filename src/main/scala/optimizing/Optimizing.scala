@@ -58,6 +58,7 @@ object Optimizing extends App {
     val mae = measurements(0)._1
 
     val users_avg = computeUsersAvg(train)
+    val global_avg = computeGlobalAvg(train)
 
     val k = 10
 
@@ -72,8 +73,10 @@ object Optimizing extends App {
     val BR12 = similarities(0, 863)
     val BR13 = similarities(0, 885)
     val BR14 = predictor10NN(0, 0)
+    //println("pred", predictor10NN(0, 1114),predictor10NN(0, 2),predictor10NN(0, 3),predictor10NN(0, 4),predictor10NN(0, 5) )
     val BR15 = predictor10NN(326, 1)
     val BR16 = 0.0//MAE(test, predictor10NN)
+
 
 
     // Save answers as JSON
