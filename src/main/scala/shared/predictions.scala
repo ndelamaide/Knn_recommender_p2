@@ -110,7 +110,7 @@ package object predictions
   }
 
 
-/*--------------------------------------- Milestone 2 --------------------------------------------------*/
+/*--------------------------------------- BR --------------------------------------------------*/
 
   // Rows are users, Columns are movies
 
@@ -225,13 +225,10 @@ package object predictions
       val similarities = computeUserSimilarities(preprocessed_ratings, k)
 
       val Ris = computeRi_(ratings, standardized_ratings, similarities)
-
-
       
         (u: Int, i: Int) =>  {
 
           val ru = users_avg(u)
-
 
           if (ru != 0.0) {
 
@@ -266,33 +263,78 @@ package object predictions
   }
 
 
-  /* ----------------------------------- Parallel k-NN ----------------------------------------- */
+  /*--------------------------------------- EK --------------------------------------------------*/
   
+  def computeUserSimilaritiesParallel(preprocessed_ratings: CSCMatrix[Double], u: Int): DenseVector[Double] = {
 
+    val ratings_u = preprocessed_ratings.t(0 to preprocessed_ratings.cols-1, u)
 
-  // def parallelKNN(ratings: Array[Rating], sc: org.apache.spark.SparkContext, k: Int): CSCMatrix[Double] = {
+    preprocessed_ratings(u, 0 to preprocessed_ratings.cols-1) := 0.0 // remove self similarity
 
-  //     val users_avg = computeUsersAvg(ratings)
-  //     val standardized_ratings = standardizeRatings(ratings, users_avg)
-  //     val preprocessed_ratings = preprocessRatings(standardized_ratings)
+    return new DenseVector((preprocessed_ratings * ratings_u).toArray)
+  }
 
-  //     val br = sc.broadcast(preprocessed_ratings)
+  def parallelKNN(preprocessed_ratings: CSCMatrix[Double], sc: org.apache.spark.SparkContext, k: Int): CSCMatrix[Double] = {
 
-  //     def topk(u: Int): (Int, (Int, Double)) = {
+    val br = sc.broadcast(preprocessed_ratings)
 
-  //       val r_curve = br.value
-  //       val su = 
-  //     }
+    def topk(u: Int): (Int, IndexedSeq[(Int, Double)]) = {
 
+      val ratings_ = br.value
+      val su = computeUserSimilaritiesParallel(ratings_, u)
 
+      return (u, argtopk(su, k).map(v => (v, su(v))))
+    }
 
+    val topks = sc.parallelize(0 to preprocessed_ratings.rows-1).map(topk(_)).collect()
 
-  //     val builder = new CSCMatrix.Builder[Double](rows=2, cols=2) // ex
+    val builder = new CSCMatrix.Builder[Double](rows=preprocessed_ratings.rows, cols=preprocessed_ratings.cols)
 
-  //     return builder.result
+    for ((user, topk) <- topks) {
+      for ((other_user, similarity) <- topk) {
+        builder.add(user, other_user, similarity)
+      }
+    }
 
-  // }
+    return builder.result
+  }
 
+  /**
+    * Predictor for any k-nearest neighboors
+    *
+    * @param ratings
+    * @return a predictor for any k
+    */
+  def predictorAllNN(ratings: CSCMatrix[Double], sc: org.apache.spark.SparkContext): Int => (Int, Int) => Double = {
+
+    val global_avg = computeGlobalAvg(ratings)
+    val users_avg = computeUsersAvg(ratings)
+    val standardized_ratings = standardizeRatings(ratings, users_avg)
+    val preprocessed_ratings = preprocessRatings(standardized_ratings)
+
+    (k: Int) => {
+
+      val similarities = parallelKNN(preprocessed_ratings, sc, k)
+
+      val Ris = computeRi_(ratings, standardized_ratings, similarities)
+      
+        (u: Int, i: Int) =>  {
+
+          val ru = users_avg(u)
+
+          if (ru != 0.0) {
+
+            val ri = Ris(u, i)
+
+            ru + ri * scale(ru + ri, ru)
+
+          } else {
+
+            global_avg
+          }          
+        }
+    }
+  }
 
 }
 

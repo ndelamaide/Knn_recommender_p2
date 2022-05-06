@@ -60,6 +60,25 @@ object Exact {
     }))
     val timings = measurements.map(_._2)
 
+    val users_avg = computeUsersAvg(train)
+    val global_avg = computeGlobalAvg(train)
+
+    val k = 10
+
+    val standardized_ratings = standardizeRatings(train, users_avg)
+    val preprocessed_ratings = preprocessRatings(standardized_ratings)
+    val similarities = parallelKNN(preprocessed_ratings, sc, k)
+
+    val predictor_allnn = predictorAllNN(train)
+    val predictor10NN = predictor_allnn(k)
+
+    val EK11 = similarities(0,0)
+    val EK12 = similarities(0, 863)
+    val EK13 = similarities(0, 885)
+    val EK14 = predictor10NN(0, 0)
+    val EK15 = predictor10NN(326, 1)
+    val EK16 = MAE(test, predictor10NN)
+
     // Save answers as JSON
     def printToFile(content: String,
                     location: String = "./answers.json") =
@@ -86,12 +105,12 @@ object Exact {
             "num_measurements" -> ujson.Num(conf.num_measurements())
           ),
           "EK.1" -> ujson.Obj(
-            "1.knn_u1v1" -> ujson.Num(0.0),
-            "2.knn_u1v864" -> ujson.Num(0.0),
-            "3.knn_u1v886" -> ujson.Num(0.0),
-            "4.PredUser1Item1" -> ujson.Num(0.0),
-            "5.PredUser327Item2" -> ujson.Num(0.0),
-            "6.Mae" -> ujson.Num(0.0)
+            "1.knn_u1v1" -> ujson.Num(EK11),
+            "2.knn_u1v864" -> ujson.Num(EK12),
+            "3.knn_u1v886" -> ujson.Num(EK13),
+            "4.PredUser1Item1" -> ujson.Num(EK14),
+            "5.PredUser327Item2" -> ujson.Num(EK15),
+            "6.Mae" -> ujson.Num(EK16)
           ),
           "EK.2" ->  ujson.Obj(
             "average (ms)" -> ujson.Num(mean(timings)), // Datatype of answer: Double

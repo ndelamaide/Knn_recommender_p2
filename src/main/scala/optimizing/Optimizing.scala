@@ -75,7 +75,7 @@ object Optimizing extends App {
     val BR14 = predictor10NN(0, 0)
     //println("pred", predictor10NN(0, 1114),predictor10NN(0, 2),predictor10NN(0, 3),predictor10NN(0, 4),predictor10NN(0, 5) )
     val BR15 = predictor10NN(326, 1)
-    val BR16 = 0.0//MAE(test, predictor10NN)
+    val BR16 = MAE(test, predictor10NN)
 
 
 
