@@ -269,9 +269,11 @@ package object predictions
 
     val ratings_u = preprocessed_ratings.t(0 to preprocessed_ratings.cols-1, u)
 
-    preprocessed_ratings(u, 0 to preprocessed_ratings.cols-1) := 0.0 // remove self similarity
+    //preprocessed_ratings(u, 0 to preprocessed_ratings.cols-1) := 0.0 
 
-    return new DenseVector((preprocessed_ratings * ratings_u).toArray)
+    var result = new DenseVector((preprocessed_ratings * ratings_u).toArray)
+    result(u) = 0 // remove self similarity
+    return result
   }
 
   def parallelKNN(preprocessed_ratings: CSCMatrix[Double], sc: org.apache.spark.SparkContext, k: Int): CSCMatrix[Double] = {
