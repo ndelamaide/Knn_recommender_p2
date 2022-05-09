@@ -317,8 +317,6 @@ package object predictions
 
       val similarities = parallelKNN(preprocessed_ratings, sc, k)
 
-      print(similarities.rows, similarities.cols)
-
       val Ris = computeRi_(ratings, standardized_ratings, similarities)
       
         (u: Int, i: Int) =>  {
