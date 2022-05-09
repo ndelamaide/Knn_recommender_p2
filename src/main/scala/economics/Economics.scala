@@ -22,7 +22,7 @@ object Economics {
     // E.1
     val price_icc = 38600
     val renting_icc = 20.40
-    val E1 = price_icc / renting_icc
+    val E1 = (price_icc / renting_icc + 0.5).round
 
     // E.2
     val container_GB_s = 1.6e-7
@@ -42,8 +42,8 @@ object Economics {
 
     val E22 = 4 * (power_idle * 1e-3 * energy_cost * 24) //4RPisDailyCostIdle
     val E23 = 4 * (power_computing * 1e-3 * energy_cost * 24) //4RPisDailyCostComputing
-    val E24 = price_RPi / (E21 - E22)
-    val E25 = price_RPi / (E21 - E23)
+    val E24 = (4 * price_RPi / (E21 - E22) + 0.5).round
+    val E25 = (4 * price_RPi / (E21 - E23) + 0.5).round
 
     // E.3
     val E31 = (price_icc / price_RPi).floor //NbRPisEqBuyingICCM7
@@ -54,9 +54,7 @@ object Economics {
     val E32 = ram_RPis / ram_ICC 
 
     // Throughput 1 vCPU = 4 RPis
-    val E33 = E31 / 4
-
-
+    val E33 = (E31 / 112)
 
     // Save answers as JSON
     def printToFile(content: String,
