@@ -201,7 +201,8 @@ package object predictions
     var result = new CSCMatrix.Builder[Double](rows=ratings.rows, cols=ratings.cols)
 
     for ((k,v) <- numerator.activeIterator) {
-      result.add(k._1, k._2, v/(denominator(k)))
+      val denominator_k = denominator(k)
+      if (denominator_k != 0.0) result.add(k._1, k._2, v/denominator_k)
     }   
 
     return result.result
