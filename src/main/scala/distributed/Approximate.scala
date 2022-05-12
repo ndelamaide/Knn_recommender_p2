@@ -72,6 +72,26 @@ object Approximate {
     val mae = measurements(0)._1
     val timings = measurements.map(_._2)
 
+    println(conf.users, conf.partitions, conf.replication)
+
+    //val train_replicated = replication(train, conf.replication())
+    val users_avg = computeUsersAvg(train)
+    val standardized_ratings = standardizeRatings(train, users_avg)
+    val preprocessed_ratings = preprocessRatings(standardized_ratings)
+
+
+    val similarities = parallelKNN_approximate(preprocessed_ratings, sc, conf_k, conf.partitions(), conf.replication())
+
+    println(similarities.rows)
+    val predictor_allnn = predictorAllNN(train, sc)
+    val predictor10NN = predictor_allnn(conf_k)
+
+    val AK11 = similarities(0,0)
+    val AK12 = similarities(0,863)
+    val AK13 = similarities(0,343)
+    val AK14 = similarities(0,15)
+    val AK15 = similarities(0,333)
+    val AK16 = similarities(0,1)
 
 
     // Save answers as JSON
@@ -102,12 +122,12 @@ object Approximate {
             "replication" -> ujson.Num(conf.replication()) 
           ),
           "AK.1" -> ujson.Obj(
-            "knn_u1v1" -> ujson.Num(0.0),
-            "knn_u1v864" -> ujson.Num(0.0),
-            "knn_u1v344" -> ujson.Num(0.0),
-            "knn_u1v16" -> ujson.Num(0.0),
-            "knn_u1v334" -> ujson.Num(0.0),
-            "knn_u1v2" -> ujson.Num(0.0)
+            "knn_u1v1" -> ujson.Num(AK11),
+            "knn_u1v864" -> ujson.Num(AK12),
+            "knn_u1v344" -> ujson.Num(AK13),
+            "knn_u1v16" -> ujson.Num(AK14),
+            "knn_u1v334" -> ujson.Num(AK15),
+            "knn_u1v2" -> ujson.Num(AK16)
           ),
           "AK.2" -> ujson.Obj(
             "mae" -> ujson.Num(mae) 
