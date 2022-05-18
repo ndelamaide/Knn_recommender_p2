@@ -56,11 +56,6 @@ object Exact {
     val test = loadSpark(sc, conf.test(), conf.separator(), conf.users(), conf.movies())
 
     val measurements = (1 to scala.math.max(1,conf.num_measurements())).map(_ => timingInMs( () => {
-      val users_avg = computeUsersAvg(train)
-      val standardized_ratings = standardizeRatings(train, users_avg)
-      val preprocessed_ratings = preprocessRatings(standardized_ratings)
-      val similarities = parallelKNN(preprocessed_ratings, sc, conf_k)
-
       val predictor_allnn = predictorAllNN(train, sc)
       val predictor10NN = predictor_allnn(conf_k)
       MAE(test, predictor10NN)
@@ -82,7 +77,7 @@ object Exact {
     val EK13 = similarities(0, 885)
     val EK14 = predictor10NN(0, 0)
     val EK15 = predictor10NN(326, 1)
-    val EK16 = mae//MAE(test, predictor10NN)
+    val EK16 = MAE(test, predictor10NN)
 
     // Save answers as JSON
     def printToFile(content: String,
