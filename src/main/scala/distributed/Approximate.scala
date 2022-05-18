@@ -72,7 +72,6 @@ object Approximate {
     val mae = measurements(0)._1
     val timings = measurements.map(_._2)
 
-    println(conf.users, conf.partitions, conf.replication)
 
     //val train_replicated = replication(train, conf.replication())
     val users_avg = computeUsersAvg(train)
@@ -82,9 +81,8 @@ object Approximate {
 
     val similarities = parallelKNN_approximate(preprocessed_ratings, sc, conf_k, conf.partitions(), conf.replication())
 
-    println(similarities.rows)
-    val predictor_allnn = predictorAllNN(train, sc)
-    val predictor10NN = predictor_allnn(conf_k)
+    // val predictor_allnn = predictorAllNN(train, sc)
+    // val predictor10NN = predictor_allnn(conf_k)
 
     val AK11 = similarities(0,0)
     val AK12 = similarities(0,863)
@@ -93,6 +91,8 @@ object Approximate {
     val AK15 = similarities(0,333)
     val AK16 = similarities(0,1)
 
+    // val AK2 = MAE(test, predictor10NN)
+    val AK2 = 0
 
     // Save answers as JSON
     def printToFile(content: String,

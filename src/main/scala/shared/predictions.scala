@@ -362,61 +362,138 @@ package object predictions
       for (i <- argtopk(similar_u, k)) {
 
         // Need both ?
-        //builder.add(i, u, similar_u(i))
+        // builder.add(i, u, similar_u(i))
 
-        //if(similar_u(i)!=0)  println("non zero")
+        // if(similar_u(i)!=0)  println("non zero")
         builder.add(u, i, similar_u(i)) 
       }
     }
 
     return builder.result
   }
-  def parallelKNN_approximate(preprocessed_ratings: CSCMatrix[Double], sc: org.apache.spark.SparkContext, k: Int, partitions: Int, replications: Int): CSCMatrix[Double] = {
 
+  // def computeUserSimilaritiesParallelApproximate(preprocessed_ratings: SliceMatrix[Int,Int,Double], k: Int): CSCMatrix[Double] = {
+
+  //   val bb = new CSCMatrix.Builder[Double](rows=preprocessed_ratings.rows, cols=preprocessed_ratings.cols)
+
+  //   for ( ((i,j), v) <- preprocessed_ratings.activeIterator){
+  //     bb.add(i, j, v)
+  //   }
+
+  //   val preprocessed_ratings_ = bb.result // pour avoir une CSCmatrix peut etre pas ouf
+    
+  //   var similarities = preprocessed_ratings_ * preprocessed_ratings_.t
+
+  //   for {i <- 0 to preprocessed_ratings_.rows -1}{
+  //     similarities(i,i)=0
+  //   }
+
+
+  //   return similarities
+  // }
+
+
+  def parallelKNN_approximate(preprocessed_ratings: CSCMatrix[Double], sc: org.apache.spark.SparkContext, k: Int, partitions: Int, replications: Int): CSCMatrix[Double] = {
+    
+    
 
     val preprocessed_ratings_replicated = replication(preprocessed_ratings, replications)
 
-    def topk_RDD(k: Int, sub_ratings: SliceMatrix[Int,Int,Double]): CSCMatrix[Double] = {
-      //val sub_ratings = 
-      //preprocessed_ratings(u to u+batch_size-1, 0 to preprocessed_ratings.cols-1)
-      val su = computeUserSimilaritiesParallelApproximate(sub_ratings, k)//.toDense
+    def topk_RDD(k: Int, sub_ratings: SliceMatrix[Int,Int,Double]): IndexedSeq[((Int, Int), Double)] = {
+
+      val su = computeUserSimilaritiesParallelApproximate(sub_ratings, k)
       
-      return su//argtopk(su, k).map(v => (v, su(v)))
+      val iterator =
+        for {((user1, user2), sim) <- su.activeIterator}yield(((user1, user2), sim))
+
+      return iterator.toIndexedSeq//argtopk(su, k).map(v => (v, su(v)))
     }
-
     val batch_size = preprocessed_ratings_replicated.rows/partitions + 1
-    val indices = 
-      for{i <- 0 to partitions-1}yield{
-        i*batch_size
-      }
-      
-    val ratings_RDD = sc.parallelize(indices, partitions)
+
+    // val indices = 
+    //   for{i <- 0 to partitions-1}yield{
+    //     i*batch_size
+    //   }
+
+    // for {i <- (0 to preprocessed_ratings_replicated.rows-1).toSet.sliding(batch_size, batch_size) }{
+    //   println(1)
+    // }
+
+    // val indices = (0 to preprocessed_ratings_replicated.rows-1).grouped(batch_size).toSeq
+
+    val indices_RDD = sc.parallelize((0 to preprocessed_ratings_replicated.rows-1).grouped(batch_size).toSeq, partitions)
+    //val indices_RDD = sc.parallelize((0 to preprocessed_ratings_replicated.rows-1), partitions)
+
+    //for {i <- indices_RDD}{println(i)}
+    val ratings_RDD = indices_RDD.map(users =>
+      preprocessed_ratings_replicated(users.head to users.last-1, 0 to preprocessed_ratings_replicated.cols-1)
+    )
+    // val ratings_RDD = sc.parallelize(indices, partitions)
+
+    // val topks = ratings_RDD.map(u => 
+    //   if(u == indices(partitions-1)){ // pour éviter indices out of bounds
+    //     topk_RDD(k, preprocessed_ratings_replicated(u to preprocessed_ratings_replicated.rows-1, 0 to preprocessed_ratings_replicated.cols-1))
+    //   } else topk_RDD(k, preprocessed_ratings_replicated(u to u+batch_size-1, 0 to preprocessed_ratings_replicated.cols-1))).collect()
+    
+
+    
+    val results = ratings_RDD.map(slice => topk_RDD(k, slice)).collect()
+    // var results = Seq[IndexedSeq[((Int, Int), Double)]]()
+    
+    // ratings_RDD.foreach(slice => {
+    //   //println(topk_RDD(k, slice))
+    //   results = results :+ topk_RDD(k, slice)
+    // })
 
 
-    val topks = ratings_RDD.map(u => 
-      if(u == indices(partitions-1)){ // pour éviter indices out of bounds
-        topk_RDD(k, preprocessed_ratings_replicated(u to preprocessed_ratings_replicated.rows-1, 0 to preprocessed_ratings_replicated.cols-1))
-      } else topk_RDD(k, preprocessed_ratings_replicated(u to u+batch_size-1, 0 to preprocessed_ratings_replicated.cols-1))).collect()
+    val builder_test = new CSCMatrix.Builder[Double](rows=preprocessed_ratings_replicated.rows, cols=preprocessed_ratings_replicated.rows)
 
-    val builder = new CSCMatrix.Builder[Double](rows=preprocessed_ratings.rows, cols=preprocessed_ratings.rows)
 
     val users_number = preprocessed_ratings_replicated.rows
 
-    for (i <- topks) {
-      for (((user1,user2), similarity) <- i.activeIterator){
+    println(results)
+    for {i <- results}{
+      for {((user1,user2), similarity) <- i}{
         //if(similarity!=0){println("OKOKOKOKOKOK")}
+        println(((user1,user2), similarity))
         if (user1 > users_number-1 ||  user2 > users_number-1){
-          if (builder.result(user1, user2)<similarity){builder.add(user1%users_number, user2%users_number, similarity)} //take largest similarity in replications
-        }else{builder.add(user1, user2, similarity)}
+          if (builder_test.result(user1, user2)<similarity){builder_test.add(user1%users_number, user2%users_number, similarity)} //take largest similarity in replications
+        }else{
+          builder_test.add(user1, user2, similarity)
+        }
+      }
+    }
+    
+
+    // ratings_RDD.foreach(slice => 
+    //   for {((user1,user2), similarity) <- topk_RDD(k, slice).activeIterator}{
+
+    //     if (user1 > users_number-1 ||  user2 > users_number-1){
+    //       if (builder_test.result(user1, user2)<similarity){builder_test.add(user1%users_number, user2%users_number, similarity)} //take largest similarity in replications
+    //       }else{builder_test.add(user1, user2, similarity)}
+    //   }
+    // )//.collect()
+
+
+    // val builder = new CSCMatrix.Builder[Double](rows=preprocessed_ratings.rows, cols=preprocessed_ratings.rows)
+
+    // val users_number = preprocessed_ratings_replicated.rows
+
+    // for (i <- topks) {
+    //   for (((user1,user2), similarity) <- i.activeIterator){
+    //     //if(similarity!=0){println("OKOKOKOKOKOK")}
+    //     if (user1 > users_number-1 ||  user2 > users_number-1){
+    //       if (builder.result(user1, user2)<similarity){builder.add(user1%users_number, user2%users_number, similarity)} //take largest similarity in replications
+    //     }else{builder.add(user1, user2, similarity)}
         
         
       
-      }
+    //   }
        
         
-    }
+    // }
 
-    return builder.result
+    return builder_test.result
   }
 
 
@@ -430,6 +507,36 @@ package object predictions
 
   }
 
+  // def predictorAllNNApproximate(ratings: CSCMatrix[Double], sc: org.apache.spark.SparkContext): Int => (Int, Int) => Double = {
+
+  //   val global_avg = computeGlobalAvg(ratings)
+  //   val users_avg = computeUsersAvg(ratings)
+  //   val standardized_ratings = standardizeRatings(ratings, users_avg)
+  //   val preprocessed_ratings = preprocessRatings(standardized_ratings)
+
+  //   (k: Int) => {
+
+  //     val similarities = parallelKNN(preprocessed_ratings, sc, k)
+
+  //     val Ris = computeRi_(ratings, standardized_ratings, similarities)
+      
+  //       (u: Int, i: Int) =>  {
+
+  //         val ru = users_avg(u)
+
+  //         if (ru != 0.0) {
+
+  //           val ri = Ris(u, i)
+
+  //           ru + ri * scale(ru + ri, ru)
+
+  //         } else {
+
+  //           global_avg
+  //         }          
+  //       }
+  //   }
+  // }
 }
 
 
