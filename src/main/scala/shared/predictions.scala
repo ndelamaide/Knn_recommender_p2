@@ -397,18 +397,51 @@ package object predictions
     
     
 
-    val preprocessed_ratings_replicated = replication(preprocessed_ratings, replications)
+    //val preprocessed_ratings_replicated = replication(preprocessed_ratings, replications)
+    val users_list = (0 to preprocessed_ratings.rows-1).toList
+    val users_replicated = replication(users_list, replications)
+    val br = sc.broadcast(preprocessed_ratings)
 
-    def topk_RDD(k: Int, sub_ratings: SliceMatrix[Int,Int,Double]): IndexedSeq[((Int, Int), Double)] = {
+    // def topk_RDD(k: Int, sub_ratings: SliceMatrix[Int,Int,Double]): IndexedSeq[((Int, Int), Double)] = {
+      
+    //   val bb = new CSCMatrix.Builder[Double](rows=sub_ratings.rows, cols=sub_ratings.cols)
 
-      val su = computeUserSimilaritiesParallelApproximate(sub_ratings, k)
+    //   for ( ((i,j), v) <- sub_ratings.activeIterator){
+    //     bb.add(i, j, v)
+    //   }
+
+    //   val sub_ratings_ = bb.result // pour avoir une CSCmatrix peut etre pas ouf
+
+    //   val su = computeUserSimilarities(sub_ratings_, k)
+      
+    //   val iterator =
+    //     for {((user1, user2), sim) <- su.activeIterator}yield(((user1, user2), sim))
+
+    //   return iterator.toIndexedSeq //argtopk(su, k).map(v => (v, su(v)))
+    // }
+
+
+
+    def topk_RDD(users: Iterator[Int]): Iterator[((Int, Int), Double)] = {
+      val ratings_ = br.value
+      val bb = new CSCMatrix.Builder[Double](rows=ratings_.rows, cols=ratings_.cols)
+
+      for ( ((i,j), v) <- ratings_.activeIterator){
+        if (users.contains(i)){bb.add(i, j, v)}
+        
+      }
+      //println(users)
+      val sub_ratings_ = bb.result // pour avoir une CSCmatrix peut etre pas ouf
+      val su = computeUserSimilarities(sub_ratings_, k)
+      //println(su)
       
       val iterator =
         for {((user1, user2), sim) <- su.activeIterator}yield(((user1, user2), sim))
-
-      return iterator.toIndexedSeq//argtopk(su, k).map(v => (v, su(v)))
+      return iterator //argtopk(su, k).map(v => (v, su(v)))
     }
-    val batch_size = preprocessed_ratings_replicated.rows/partitions + 1
+
+
+    //val batch_size = preprocessed_ratings_replicated.rows/partitions + 1
 
     // val indices = 
     //   for{i <- 0 to partitions-1}yield{
@@ -419,15 +452,30 @@ package object predictions
     //   println(1)
     // }
 
-    // val indices = (0 to preprocessed_ratings_replicated.rows-1).grouped(batch_size).toSeq
+    //val indices = (0 to preprocessed_ratings_replicated.rows-1).grouped(batch_size).toSeq
 
-    val indices_RDD = sc.parallelize((0 to preprocessed_ratings_replicated.rows-1).grouped(batch_size).toSeq, partitions)
-    //val indices_RDD = sc.parallelize((0 to preprocessed_ratings_replicated.rows-1), partitions)
+    //val indices_RDD = sc.parallelize((0 to preprocessed_ratings_replicated.rows-1).grouped(batch_size).toSeq)
+    val indices_RDD = sc.parallelize(users_replicated, partitions)
+    // indices_RDD.foreachPartition(partition => 
+      
+    // )
+    //indices_RDD.foreachPartition(users => for {u<-users}{println(u)})
 
+    val results = indices_RDD.mapPartitions(users => {
+      //println("1")
+      topk_RDD(users)}).collect()
+    //results.collect().foreach(println)
+    
     //for {i <- indices_RDD}{println(i)}
-    val ratings_RDD = indices_RDD.map(users =>
-      preprocessed_ratings_replicated(users.head to users.last-1, 0 to preprocessed_ratings_replicated.cols-1)
-    )
+    
+    // val test_RDD = indices_RDD.aggregate((x,y) => 
+    //   (x, y)
+
+    // )
+
+    // val ratings_RDD = indices_RDD.map(users =>
+    //   preprocessed_ratings_replicated(users.head to users.last-1, 0 to preprocessed_ratings_replicated.cols-1)
+    // )
     // val ratings_RDD = sc.parallelize(indices, partitions)
 
     // val topks = ratings_RDD.map(u => 
@@ -437,33 +485,34 @@ package object predictions
     
 
     
-    val results = ratings_RDD.map(slice => topk_RDD(k, slice)).collect()
-    // var results = Seq[IndexedSeq[((Int, Int), Double)]]()
+    //val results = ratings_RDD.map(slice => topk_RDD(k, slice)).collect()
+    // // var results = Seq[IndexedSeq[((Int, Int), Double)]]()
     
-    // ratings_RDD.foreach(slice => {
-    //   //println(topk_RDD(k, slice))
-    //   results = results :+ topk_RDD(k, slice)
-    // })
+    // indices_RDD.foreach(slice => {
+      //println(topk_RDD(k, slice))
+      //results = results :+ topk_RDD(k, slice)
+      
+      //})
 
 
-    val builder_test = new CSCMatrix.Builder[Double](rows=preprocessed_ratings_replicated.rows, cols=preprocessed_ratings_replicated.rows)
+    val builder_test = new CSCMatrix.Builder[Double](rows=preprocessed_ratings.rows, cols=preprocessed_ratings.rows)
 
 
-    val users_number = preprocessed_ratings_replicated.rows
+    val users_number = preprocessed_ratings.rows
 
-    println(results)
-    for {i <- results}{
-      for {((user1,user2), similarity) <- i}{
-        //if(similarity!=0){println("OKOKOKOKOKOK")}
-        println(((user1,user2), similarity))
-        if (user1 > users_number-1 ||  user2 > users_number-1){
-          if (builder_test.result(user1, user2)<similarity){builder_test.add(user1%users_number, user2%users_number, similarity)} //take largest similarity in replications
-        }else{
-          builder_test.add(user1, user2, similarity)
-        }
-      }
+    
+    for {((user1,user2), similarity) <- results}{
+      //if(similarity!=0){println("OKOKOKOKOKOK")}
+      //println(((user1,user2), similarity))
+      
+      if (builder_test.result(user1, user2)<similarity){
+        //println("GOGOGOG")
+        builder_test.add(user1, user2, similarity)
+      } //take largest similarity in replications
+
+      
     }
-    
+    //println(builder_test.result)
 
     // ratings_RDD.foreach(slice => 
     //   for {((user1,user2), similarity) <- topk_RDD(k, slice).activeIterator}{
@@ -497,13 +546,18 @@ package object predictions
   }
 
 
-  def replication(preprocessed_ratings: CSCMatrix[Double], replication: Int): CSCMatrix[Double] = {
-    val builder = new CSCMatrix.Builder[Double](rows=preprocessed_ratings.rows*replication, cols=preprocessed_ratings.cols)
-    for ((k,v) <- preprocessed_ratings.activeIterator) {
-      for{ i <- 0 to replication-1}
-        builder.add(k._1 + i*preprocessed_ratings.rows, k._2, v)
-    }   
-    return builder.result
+  // def replication(preprocessed_ratings: CSCMatrix[Double], replication: Int): CSCMatrix[Double] = {
+  //   val builder = new CSCMatrix.Builder[Double](rows=preprocessed_ratings.rows*replication, cols=preprocessed_ratings.cols)
+  //   for ((k,v) <- preprocessed_ratings.activeIterator) {
+  //     for{ i <- 0 to replication-1}
+  //       builder.add(k._1 + i*preprocessed_ratings.rows, k._2, v)
+  //   }   
+  //   return builder.result
+
+  // }
+  def replication(users: List[Int], replications: Int): List[Int] = {
+  
+    return users.flatMap(e => List.fill(replications)(e))
 
   }
 
