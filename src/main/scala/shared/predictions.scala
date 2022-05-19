@@ -389,7 +389,7 @@ package object predictions
   //   return similarities
   // }
 
-  def parallelKNNHelper(preprocessed_ratings: CSCMatrix[Double], sc: org.apache.spark.SparkContext, k: Int): Array[((Int, Int), Double)] = {
+  def parallelKNNHelper(preprocessed_ratings: CSCMatrix[Double], sc: org.apache.spark.SparkContext, k: Int): Array[(Int, (Int, Double))] = {
 
     val br = sc.broadcast(preprocessed_ratings)
 
@@ -405,7 +405,8 @@ package object predictions
     for {
       (user, topk) <- topks
       (other_user, similarity) <- topk
-    } yield ((user, other_user), similarity)
+      if (user != other_user)
+    } yield (user, (other_user, similarity))
   }
 
 
@@ -433,12 +434,14 @@ package object predictions
     })
     
     // Compute similarities for each partition and merge partitions
-    val key_sim_pairs = partitioned_ratings.flatMap((partition => parallelKNNHelper(partition, sc, k))).groupBy(_._1).mapValues(list_ratings => list_ratings.map(x => x._2).max)
+    val key_sim_pairs = partitioned_ratings.flatMap((partition => parallelKNNHelper(partition, sc, k))).groupBy(_._1).mapValues(list_ratings => list_ratings.map(x => x._2).sortBy(-_._2).slice(0, k))
 
     val builder = new CSCMatrix.Builder[Double](rows=preprocessed_ratings.rows, cols=preprocessed_ratings.rows)
 
-    for ((key, sim) <- key_sim_pairs) {
-      if (key._1 != key._2) builder.add(key._1, key._2, sim)
+    for ((user, list_sim) <- key_sim_pairs) {
+      for ((other_user, sim) <- list_sim) {
+        builder.add(user, other_user, sim)
+      }
     }
 
     return builder.result
