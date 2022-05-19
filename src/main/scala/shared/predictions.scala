@@ -7,6 +7,7 @@ import scala.collection.mutable.ArrayBuffer
 import org.apache.spark.SparkContext
 
 import org.apache.spark.rdd.RDD // TO REMOVE NOT IN MILESTONE 2
+import scala.collection.mutable.ListBuffer
 
 package object predictions
 {
@@ -388,15 +389,65 @@ package object predictions
   //   return similarities
   // }
 
+  def parallelKNNHelper(preprocessed_ratings: CSCMatrix[Double], sc: org.apache.spark.SparkContext, k: Int): Array[((Int, Int), Double)] = {
 
-  def parallelKNN_approximate(preprocessed_ratings: CSCMatrix[Double], sc: org.apache.spark.SparkContext, k: Int, partitions: Int, replications: Int): CSCMatrix[Double] = {
+    val br = sc.broadcast(preprocessed_ratings)
+
+    def topk(u: Int): (Int, IndexedSeq[(Int, Double)]) = {
+
+      val ratings_ = br.value
+      val su = computeUserSimilaritiesParallel(ratings_, u)
+      return (u, argtopk(su, k).map(v => (v, su(v))))
+    }
+
+    val topks = sc.parallelize(0 to preprocessed_ratings.rows-1).map(topk(_)).collect()
+
+    for {
+      (user, topk) <- topks
+      (other_user, similarity) <- topk
+    } yield ((user, other_user), similarity)
+  }
+
+
+  def parallelKNNApproximate(preprocessed_ratings: CSCMatrix[Double], sc: org.apache.spark.SparkContext, k: Int, partitioned_users: Seq[Set[Int]]): CSCMatrix[Double] = {
     
+    var partitioned_ratings = ListBuffer[CSCMatrix[Double]]()
+
+    val preprocessed_ratings_t = preprocessed_ratings.t
+
+    // Divide the ratings in corresponding partitions
+    partitioned_users.foreach(partition => {
+
+      val builder = new CSCMatrix.Builder[Double](rows=preprocessed_ratings.rows, cols=preprocessed_ratings.cols)
+
+      for (user_partition <- partition) {
+        val user_ratings = preprocessed_ratings_t(0 to preprocessed_ratings_t.rows-1, user_partition)
+        //val user_ratings = preprocessed_ratings(user_partition, 0 to preprocessed_ratings_t.cols-1).t
+
+        for ((k, v) <- user_ratings.activeIterator) {
+          builder.add(user_partition, k, v)
+        }
+      }
+
+      partitioned_ratings += builder.result
+    })
     
+    // Compute similarities for each partition and merge partitions
+    val key_sim_pairs = partitioned_ratings.flatMap((partition => parallelKNNHelper(partition, sc, k))).groupBy(_._1).mapValues(list_ratings => list_ratings.map(x => x._2).max)
+
+    val builder = new CSCMatrix.Builder[Double](rows=preprocessed_ratings.rows, cols=preprocessed_ratings.rows)
+
+    for ((key, sim) <- key_sim_pairs) {
+      if (key._1 != key._2) builder.add(key._1, key._2, sim)
+    }
+
+    return builder.result
+
 
     //val preprocessed_ratings_replicated = replication(preprocessed_ratings, replications)
-    val users_list = (0 to preprocessed_ratings.rows-1).toList
-    val users_replicated = replication(users_list, replications)
-    val br = sc.broadcast(preprocessed_ratings)
+    // val users_list = (0 to preprocessed_ratings.rows-1).toList
+    // val users_replicated = replication(users_list, replications)
+    // val br = sc.broadcast(preprocessed_ratings)
 
     // def topk_RDD(k: Int, sub_ratings: SliceMatrix[Int,Int,Double]): IndexedSeq[((Int, Int), Double)] = {
       
@@ -418,23 +469,23 @@ package object predictions
 
 
 
-    def topk_RDD(users: Iterator[Int]): Iterator[((Int, Int), Double)] = {
-      val ratings_ = br.value
-      val bb = new CSCMatrix.Builder[Double](rows=ratings_.rows, cols=ratings_.cols)
+    // def topk_RDD(users: Iterator[Int]): Iterator[((Int, Int), Double)] = {
+    //   val ratings_ = br.value
+    //   val bb = new CSCMatrix.Builder[Double](rows=ratings_.rows, cols=ratings_.cols)
 
-      for ( ((i,j), v) <- ratings_.activeIterator){
-        if (users.contains(i)){bb.add(i, j, v)}
+    //   for ( ((i,j), v) <- ratings_.activeIterator){
+    //     if (users.contains(i)){bb.add(i, j, v)}
         
-      }
-      //println(users)
-      val sub_ratings_ = bb.result // pour avoir une CSCmatrix peut etre pas ouf
-      val su = computeUserSimilarities(sub_ratings_, k)
-      //println(su)
+    //   }
+    //   //println(users)
+    //   val sub_ratings_ = bb.result // pour avoir une CSCmatrix peut etre pas ouf
+    //   val su = computeUserSimilarities(sub_ratings_, k)
+    //   //println(su)
       
-      val iterator =
-        for {((user1, user2), sim) <- su.activeIterator}yield(((user1, user2), sim))
-      return iterator //argtopk(su, k).map(v => (v, su(v)))
-    }
+    //   val iterator =
+    //     for {((user1, user2), sim) <- su.activeIterator}yield(((user1, user2), sim))
+    //   return iterator //argtopk(su, k).map(v => (v, su(v)))
+    // }
 
 
     //val batch_size = preprocessed_ratings_replicated.rows/partitions + 1
@@ -451,15 +502,15 @@ package object predictions
     //val indices = (0 to preprocessed_ratings_replicated.rows-1).grouped(batch_size).toSeq
 
     //val indices_RDD = sc.parallelize((0 to preprocessed_ratings_replicated.rows-1).grouped(batch_size).toSeq)
-    val indices_RDD = sc.parallelize(users_replicated, partitions)
+    //val indices_RDD = sc.parallelize(users_replicated, partitions)
     // indices_RDD.foreachPartition(partition => 
       
     // )
     //indices_RDD.foreachPartition(users => for {u<-users}{println(u)})
 
-    val results = indices_RDD.mapPartitions(users => {
+    //val results = indices_RDD.mapPartitions(users => {
       //println("1")
-      topk_RDD(users)}).collect()
+      //topk_RDD(users)}).collect()
     //results.collect().foreach(println)
     
     //for {i <- indices_RDD}{println(i)}
@@ -491,23 +542,23 @@ package object predictions
       //})
 
 
-    val builder_test = new CSCMatrix.Builder[Double](rows=preprocessed_ratings.rows, cols=preprocessed_ratings.rows)
+    //val builder_test = new CSCMatrix.Builder[Double](rows=preprocessed_ratings.rows, cols=preprocessed_ratings.rows)
 
 
-    val users_number = preprocessed_ratings.rows
+    //val users_number = preprocessed_ratings.rows
 
     
-    for {((user1,user2), similarity) <- results}{
+    //for {((user1,user2), similarity) <- results}{
       //if(similarity!=0){println("OKOKOKOKOKOK")}
       //println(((user1,user2), similarity))
       
-      if (builder_test.result(user1, user2)<similarity){
+      //if (builder_test.result(user1, user2)<similarity){
         //println("GOGOGOG")
-        builder_test.add(user1, user2, similarity)
-      } //take largest similarity in replications
+        //builder_test.add(user1, user2, similarity)
+      //} //take largest similarity in replications
 
       
-    }
+    //}
     //println(builder_test.result)
 
     // ratings_RDD.foreach(slice => 
@@ -538,7 +589,7 @@ package object predictions
         
     // }
 
-    return builder_test.result
+    //return builder_test.result
   }
 
 
@@ -557,36 +608,36 @@ package object predictions
 
   }
 
-  // def predictorAllNNApproximate(ratings: CSCMatrix[Double], sc: org.apache.spark.SparkContext): Int => (Int, Int) => Double = {
+  def predictorAllNNApproximate(ratings: CSCMatrix[Double], sc: org.apache.spark.SparkContext, partitioned_users: Seq[Set[Int]]): Int => (Int, Int) => Double = {
 
-  //   val global_avg = computeGlobalAvg(ratings)
-  //   val users_avg = computeUsersAvg(ratings)
-  //   val standardized_ratings = standardizeRatings(ratings, users_avg)
-  //   val preprocessed_ratings = preprocessRatings(standardized_ratings)
+    val global_avg = computeGlobalAvg(ratings)
+    val users_avg = computeUsersAvg(ratings)
+    val standardized_ratings = standardizeRatings(ratings, users_avg)
+    val preprocessed_ratings = preprocessRatings(standardized_ratings)
 
-  //   (k: Int) => {
+    (k: Int) => {
 
-  //     val similarities = parallelKNN(preprocessed_ratings, sc, k)
+      val similarities = parallelKNNApproximate(preprocessed_ratings, sc, k, partitioned_users)
 
-  //     val Ris = computeRi_(ratings, standardized_ratings, similarities)
+      val Ris = computeRi_(ratings, standardized_ratings, similarities)
       
-  //       (u: Int, i: Int) =>  {
+        (u: Int, i: Int) =>  {
 
-  //         val ru = users_avg(u)
+          val ru = users_avg(u)
 
-  //         if (ru != 0.0) {
+          if (ru != 0.0) {
 
-  //           val ri = Ris(u, i)
+            val ri = Ris(u, i)
 
-  //           ru + ri * scale(ru + ri, ru)
+            ru + ri * scale(ru + ri, ru)
 
-  //         } else {
+          } else {
 
-  //           global_avg
-  //         }          
-  //       }
-  //   }
-  // }
+            global_avg
+          }          
+        }
+    }
+  }
 }
 
 

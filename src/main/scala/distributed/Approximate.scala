@@ -64,10 +64,10 @@ object Approximate {
       conf.partitions(), 
       conf.replication()
     )
-    val measurements = (1 to scala.math.max(1,conf.num_measurements()))
-      .map(_ => timingInMs( () => {
-      // Use partitionedUsers here
-      0.0
+    val measurements = (1 to scala.math.max(1,conf.num_measurements())).map(_ => timingInMs( () => {
+      val predictor_allnn = predictorAllNNApproximate(train, sc, partitionedUsers)
+      val predictor10NN = predictor_allnn(conf_k)
+      MAE(test, predictor10NN)
     }))
     val mae = measurements(0)._1
     val timings = measurements.map(_._2)
@@ -78,11 +78,10 @@ object Approximate {
     val standardized_ratings = standardizeRatings(train, users_avg)
     val preprocessed_ratings = preprocessRatings(standardized_ratings)
 
+    val similarities = parallelKNNApproximate(preprocessed_ratings, sc, conf_k, partitionedUsers)
 
-    val similarities = parallelKNN_approximate(preprocessed_ratings, sc, conf_k, conf.partitions(), conf.replication())
-
-    // val predictor_allnn = predictorAllNN(train, sc)
-    // val predictor10NN = predictor_allnn(conf_k)
+    val predictor_allnn = predictorAllNNApproximate(train, sc, partitionedUsers)
+    val predictor10NN = predictor_allnn(conf_k)
 
     val AK11 = similarities(0,0)
     val AK12 = similarities(0,863)
@@ -91,8 +90,7 @@ object Approximate {
     val AK15 = similarities(0,333)
     val AK16 = similarities(0,1)
 
-    // val AK2 = MAE(test, predictor10NN)
-    val AK2 = 0
+    val AK2 = MAE(test, predictor10NN)
 
     // Save answers as JSON
     def printToFile(content: String,
@@ -130,7 +128,7 @@ object Approximate {
             "knn_u1v2" -> ujson.Num(AK16)
           ),
           "AK.2" -> ujson.Obj(
-            "mae" -> ujson.Num(mae) 
+            "mae" -> ujson.Num(AK2) 
           ),
           "AK.3" -> ujson.Obj(
             "average (ms)" -> ujson.Num(mean(timings)),
