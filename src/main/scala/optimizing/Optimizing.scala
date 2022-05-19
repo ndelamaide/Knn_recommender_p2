@@ -71,7 +71,7 @@ object Optimizing extends App {
     val BR13 = similarities(0, 885)
     val BR14 = predictor10NN(0, 0)
     val BR15 = predictor10NN(326, 1)
-    val BR16 = mae//MAE(test, predictor10NN)
+    val BR16 = MAE(test, predictor10NN)
 
 
     // Save answers as JSON
