@@ -39,25 +39,37 @@ class ApproximateTests extends AnyFunSuite with BeforeAndAfterAll {
       2 
     )
 
+    val users_avg = computeUsersAvg(train2)
+
+    val standardized_ratings = standardizeRatings(train2, users_avg)
+    val preprocessed_ratings = preprocessRatings(standardized_ratings)
+
+    val similarities = parallelKNNApproximate(preprocessed_ratings, sc, 10, partitionedUsers)
+
+    val predictor_allnn = predictorAllNNApproximate(train2, sc, partitionedUsers)
+    val predictor10NN = predictor_allnn(10)
+
+    
+
      // Similarity between user 1 and itself
-     assert(within(1.0, 0.0, 0.0001))
+     assert(within(similarities(0,0), 0.0, 0.0001))
  
      // Similarity between user 1 and 864
-     assert(within(1.0, 0.0, 0.0001))
+     assert(within(similarities(0,863), 0.0, 0.0001))
 
      // Similarity between user 1 and 344
-     assert(within(1.0, 0.0, 0.0001))
+     assert(within(similarities(0,343), 0.23659364388510976, 0.0001))
 
      // Similarity between user 1 and 16
-     assert(within(1.0, 0.0, 0.0001))
+     assert(within(similarities(0,15), 0.0, 0.0001))
 
      // Similarity between user 1 and 334
-     assert(within(1.0, 0.0, 0.0001))
+     assert(within(similarities(0,333), 0.19282239907090362, 0.0001))
 
      // Similarity between user 1 and 2
-     assert(within(1.0, 0.0, 0.0001))
+     assert(within(similarities(0,1), 0.0, 0.0001))
 
      // MAE on test
-     assert(within(1.0, 0.0, 0.0001))
+     assert(within(MAE(test2, predictor10NN), 0.8442713942674099, 0.0001))
    } 
 }
