@@ -338,7 +338,7 @@ package object predictions
 
 
 
-  def parallelKNNHelper(preprocessed_ratings: CSCMatrix[Double], sc: org.apache.spark.SparkContext, k: Int): Array[(Int, (Int, Double))] = {
+  def parallelKNNHelper(preprocessed_ratings: CSCMatrix[Double], sc: org.apache.spark.SparkContext, k: Int): Seq[(Int, (Int, Double))] = {
 
     val br = sc.broadcast(preprocessed_ratings)
 
@@ -361,49 +361,33 @@ package object predictions
 
   def parallelKNNApproximate(preprocessed_ratings: CSCMatrix[Double], sc: org.apache.spark.SparkContext, k: Int, partitioned_users: Seq[Set[Int]]): CSCMatrix[Double] = {
     
-    var partitioned_ratings = ListBuffer[CSCMatrix[Double]]()
-
     val preprocessed_ratings_t = preprocessed_ratings.t
 
     // Divide the ratings in corresponding partitions
-    partitioned_users.foreach(partition => {
+    val partitioned_ratings = partitioned_users.map(partition => {
 
       val builder = new CSCMatrix.Builder[Double](rows=preprocessed_ratings.rows, cols=preprocessed_ratings.cols)
 
       for (user_partition <- partition) {
         val user_ratings = preprocessed_ratings_t(0 to preprocessed_ratings_t.rows-1, user_partition)
-        //val user_ratings = preprocessed_ratings(user_partition, 0 to preprocessed_ratings_t.cols-1).t
 
         for ((k, v) <- user_ratings.activeIterator) {
           builder.add(user_partition, k, v)
         }
       }
 
-      partitioned_ratings += builder.result
+      builder.result
     })
     
     // Compute similarities for each partition and merge partitions
-    val key_sim_pairs = partitioned_ratings.flatMap((partition => parallelKNNHelper(partition, sc, k))).groupBy(_._1).mapValues(list_ratings => list_ratings.map(x => x._2).sortBy(-_._2).slice(0, k)
-      )
-      
-    // val test = key_sim_pairs.map(x => (x._1, x._2.toList))  //.map(_._2).map(x => x.toList.groupBy(_._1).mapValues(x => x.maxBy(_._2)))
-
-    // val test2 = test.groupBy{case(user, list) =>
-    //   (user, list.map(_._1))
-    // }.mapValues(x => x.maxBy(y => y._2.map(_._2)))
+    val key_sim_pairs = partitioned_ratings.flatMap((partition => parallelKNNHelper(partition, sc, k))).groupBy(_._1).mapValues(list_ratings => 
+                        list_ratings.map(x => x._2).groupBy(_._1).map(x => x._2.maxBy(_._2)).toArray.sortBy(-_._2).slice(0, k))
 
     val builder = new CSCMatrix.Builder[Double](rows=preprocessed_ratings.rows, cols=preprocessed_ratings.rows)
 
-    // for {i <- test}{
-    //   for{(user1, (user2, sim))<- i}{
-    //     builder.add(user1, user2, sim)
-    //   }
-    // }
     for ((user, list_sim) <- key_sim_pairs) {
       for ((other_user, sim) <- list_sim) {
-        if (builder.result(user, other_user)<sim){ 
-
-          builder.add(user, other_user, sim)}
+        builder.add(user, other_user, sim)
       }
     }
 
