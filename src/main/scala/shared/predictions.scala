@@ -110,11 +110,14 @@ package object predictions
 
   def matrixMultiplication(matrix1: CSCMatrix[Double], matrix2: CSCMatrix[Double]): CSCMatrix[Double] = {
 
+      val matrix1dense = matrix1.toDense
+      val matrix2dense = matrix2.toDense
+
       val builder = new CSCMatrix.Builder[Double](rows=matrix1.rows, cols=matrix2.cols)
 
       for (col2 <- 0 to matrix2.cols-1) {
 
-        val vec_result = matrix1 * matrix2(0 to matrix2.rows-1, col2)
+        val vec_result = matrix1dense * matrix2dense(0 to matrix2.rows-1, col2)
 
         for ((r, v) <- vec_result.activeIterator) {
           builder.add(r, col2, v)
