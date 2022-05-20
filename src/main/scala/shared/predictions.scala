@@ -443,8 +443,8 @@ package object predictions
     })
     
     // Compute similarities for each partition and merge partitions
-    val key_sim_pairs = sc.parallelize(partitioned_ratings.flatMap((partition => parallelKNNHelper(partition, sc, k)))).groupBy(_._1).mapValues(list_ratings => 
-      list_ratings.map(x => x._2).groupBy(_._1).map(x => x._2.maxBy(_._2)).toArray.sortBy(-_._2).slice(0, k)).collect()
+    val key_sim_pairs = partitioned_ratings.flatMap((partition => parallelKNNHelper(partition, sc, k))).groupBy(_._1).mapValues(list_ratings => 
+      list_ratings.map(x => x._2).groupBy(_._1).map(x => x._2.maxBy(_._2)).toArray.sortBy(-_._2).slice(0, k))
 
     val builder = new CSCMatrix.Builder[Double](rows=preprocessed_ratings.rows, cols=preprocessed_ratings.rows)
 
