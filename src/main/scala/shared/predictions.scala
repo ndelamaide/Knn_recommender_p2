@@ -6,9 +6,6 @@ import scala.io.Source
 import scala.collection.mutable.ArrayBuffer
 import org.apache.spark.SparkContext
 
-import org.apache.spark.rdd.RDD // TO REMOVE NOT IN MILESTONE 2
-import scala.collection.mutable.ListBuffer
-
 package object predictions
 {
   // ------------------------ For template
@@ -380,8 +377,8 @@ package object predictions
     })
     
     // Compute similarities for each partition and merge partitions
-    val key_sim_pairs = partitioned_ratings.flatMap((partition => parallelKNNHelper(partition, sc, k))).groupBy(_._1).mapValues(list_ratings => 
-                        list_ratings.map(x => x._2).groupBy(_._1).map(x => x._2.maxBy(_._2)).toArray.sortBy(-_._2).slice(0, k))
+    val key_sim_pairs = sc.parallelize(partitioned_ratings.flatMap((partition => parallelKNNHelper(partition, sc, k)))).groupBy(_._1).mapValues(list_ratings => 
+      list_ratings.map(x => x._2).groupBy(_._1).map(x => x._2.maxBy(_._2)).toArray.sortBy(-_._2).slice(0, k)).collect()
 
     val builder = new CSCMatrix.Builder[Double](rows=preprocessed_ratings.rows, cols=preprocessed_ratings.rows)
 
