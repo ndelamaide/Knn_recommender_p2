@@ -49,8 +49,6 @@ class ApproximateTests extends AnyFunSuite with BeforeAndAfterAll {
     val predictor_allnn = predictorAllNNApproximate(train2, sc, partitionedUsers)
     val predictor10NN = predictor_allnn(10)
 
-    
-
      // Similarity between user 1 and itself
      assert(within(similarities(0,0), 0.0, 0.0001))
  
@@ -70,6 +68,6 @@ class ApproximateTests extends AnyFunSuite with BeforeAndAfterAll {
      assert(within(similarities(0,1), 0.0, 0.0001))
 
      // MAE on test
-     assert(within(MAE(test2, predictor10NN), 0.8442713942674099, 0.0001))
+     assert(within(MAE(test2, predictor10NN), 0.8398762925733881, 0.0001))
    } 
 }
