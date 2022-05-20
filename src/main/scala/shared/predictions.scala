@@ -5,6 +5,7 @@ import breeze.numerics._
 import scala.io.Source
 import scala.collection.mutable.ArrayBuffer
 import org.apache.spark.SparkContext
+import scala.collection.mutable.ListBuffer
 
 package object predictions
 {
@@ -118,6 +119,70 @@ package object predictions
         for ((r, v) <- vec_result.activeIterator) {
           builder.add(r, col2, v)
         }
+      }
+
+      return builder.result 
+  }
+
+  def matrixMultiplication(sc: org.apache.spark.SparkContext, matrix1: CSCMatrix[Double], matrix2: CSCMatrix[Double]): CSCMatrix[Double] = {
+
+      val seq1 = for {
+        (k, v) <- matrix1.activeIterator
+      } yield((1, k._1, k._2, v))
+
+      val seq2 = for {
+        (k, v) <- matrix1.activeIterator
+      } yield((2, k._1, k._2, v))
+
+      val seq = sc.parallelize((seq1 ++ seq2).toSeq)
+
+      val test = seq.flatMap(x => {
+        val X = x._1
+        val i = x._2
+        val j = x._3
+        val xij = x._4
+
+        if (X == 1) {
+          for {
+            k <- 0 to matrix1.rows-1
+          } yield ((i, k), (X, j, xij))
+        } else {
+          for {
+            k <- 0 to matrix1.rows-1
+          } yield ((k, j), (X, i, xij))
+        } 
+      }).groupBy(_._1).map(x => {
+        val list_ = x._2
+        var Avec = ArrayBuffer[(Int, Double)]()
+        var Bvec = ArrayBuffer[(Int, Double)]()
+        var Mij = 0.0
+
+        for (elem <- list_) {
+          val X = elem._2._1
+          val k = elem._2._2
+          val xq = elem._2._3
+
+          if (X == 1) {
+            Avec += ((k, xq))
+          } else {
+            Bvec += ((k, xq))
+          }
+        }
+
+        val Avec_map = Avec.toMap
+        val Bvec_map = Bvec.toMap
+
+        for (k <- 0 to matrix1.cols-1) {
+          Mij = Mij + Avec_map(k) * Bvec_map(k)
+        }
+
+        (x._1._1, x._1._2, Mij)
+      }).collect()
+
+      val builder = new CSCMatrix.Builder[Double](rows=matrix1.rows, cols=matrix2.cols)
+
+      for (elem <- test) {
+        builder.add(elem._1, elem._2, elem._3)
       }
 
       return builder.result 
@@ -333,8 +398,6 @@ package object predictions
   }
   /*--------------------------------------- Approximate --------------------------------------------------*/
 
-
-
   def parallelKNNHelper(preprocessed_ratings: CSCMatrix[Double], sc: org.apache.spark.SparkContext, k: Int): Seq[(Int, (Int, Double))] = {
 
     val br = sc.broadcast(preprocessed_ratings)
@@ -391,7 +454,6 @@ package object predictions
     return builder.result
 
   }
-
 
   def predictorAllNNApproximate(ratings: CSCMatrix[Double], sc: org.apache.spark.SparkContext, partitioned_users: Seq[Set[Int]]): Int => (Int, Int) => Double = {
 
